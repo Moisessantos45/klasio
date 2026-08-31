@@ -2,6 +2,7 @@ import 'package:klasio/domain/entities/pagination.dart';
 
 class Folder {
   final int? id;
+  final int? parentId;
   final String name;
   final int indexIcon;
   final int indexColor;
@@ -10,6 +11,7 @@ class Folder {
 
   const Folder({
     this.id,
+    this.parentId,
     required this.name,
     required this.indexIcon,
     required this.indexColor,
@@ -19,6 +21,7 @@ class Folder {
 
   Folder copyWith({
     int? id,
+    int? parentId,
     String? name,
     int? indexIcon,
     int? indexColor,
@@ -26,6 +29,7 @@ class Folder {
     DateTime? createdAt,
   }) => Folder(
     id: id ?? this.id,
+    parentId: parentId ?? this.parentId,
     name: name ?? this.name,
     indexIcon: indexIcon ?? this.indexIcon,
     indexColor: indexColor ?? this.indexColor,

@@ -19,23 +19,34 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), 'mi_app.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+        'ALTER TABLE folders ADD COLUMN parent_id INTEGER REFERENCES folders (id) ON DELETE CASCADE',
+      );
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE folders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        parent_id INTEGER,
         name TEXT NOT NULL,
         index_icon INTEGER,
         index_color INTEGER,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (parent_id) REFERENCES folders (id) ON DELETE CASCADE
       )
     ''');
-    
+
     await db.execute('''
       CREATE TABLE tags(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +54,7 @@ class DatabaseHelper {
         created_at TEXT NOT NULL
       )
     ''');
-    
+
     await db.execute('''
       CREATE TABLE captures(
         id INTEGER PRIMARY KEY AUTOINCREMENT,

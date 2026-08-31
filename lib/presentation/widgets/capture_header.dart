@@ -7,6 +7,7 @@ class CaptureHeader extends StatelessWidget {
   final int captureCount;
   final VoidCallback? onExtractText;
   final VoidCallback? onAddCapture;
+  final VoidCallback? onAddSubfolder;
 
   const CaptureHeader({
     super.key,
@@ -15,6 +16,7 @@ class CaptureHeader extends StatelessWidget {
     required this.captureCount,
     this.onExtractText,
     this.onAddCapture,
+    this.onAddSubfolder,
   });
 
   @override
@@ -83,9 +85,29 @@ class CaptureHeader extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.document_scanner_rounded, size: 20),
               ),
+              if (onAddSubfolder != null) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: onAddSubfolder,
+                  tooltip: "Crear subcarpeta",
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.surface,
+                    foregroundColor: AppColors.primary,
+                    padding: const EdgeInsets.all(10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: BorderSide(
+                        color: AppColors.border.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.create_new_folder_outlined, size: 20),
+                ),
+              ],
               const SizedBox(width: 8),
               IconButton(
                 onPressed: onAddCapture,
+                tooltip: "Agregar captura",
                 style: IconButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,

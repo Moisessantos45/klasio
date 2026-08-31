@@ -5,9 +5,15 @@ import 'package:klasio/presentation/providers/folder_notifier.dart';
 
 class FolderModalContent extends StatefulWidget {
   final int? id;
+  final int? parentId;
   final FolderNotifier folderNotifier;
 
-  const FolderModalContent({super.key, required this.folderNotifier, this.id});
+  const FolderModalContent({
+    super.key,
+    required this.folderNotifier,
+    this.id,
+    this.parentId,
+  });
 
   @override
   State<FolderModalContent> createState() => _FolderModalContentState();
@@ -60,21 +66,23 @@ class _FolderModalContentState extends State<FolderModalContent> {
           text,
           selectedIconIndex,
           selectedColorIndex,
+          parentId: widget.parentId,
         );
       } else {
         await widget.folderNotifier.addFolder(
           text,
           selectedIconIndex,
           selectedColorIndex,
+          parentId: widget.parentId,
         );
       }
       if (!mounted) return;
-      Navigator.pop(context);
+      Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.surface,
           content: Text(
-            "Carpeta '$text' ${widget.id != null ? 'actualizada' : 'creada'} exitosamente.",
+            "${widget.parentId != null ? 'Subcarpeta' : 'Carpeta'} '$text' ${widget.id != null ? 'actualizada' : 'creada'} exitosamente.",
             style: const TextStyle(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.bold,
@@ -97,6 +105,7 @@ class _FolderModalContentState extends State<FolderModalContent> {
 
   @override
   Widget build(BuildContext context) {
+    final isSubfolder = widget.parentId != null;
     return ValueListenableBuilder<bool>(
       valueListenable: _isBusyNotifier,
       builder: (context, isBusy, child) {
@@ -136,8 +145,8 @@ class _FolderModalContentState extends State<FolderModalContent> {
                     ),
                     Text(
                       widget.id != null
-                          ? "Editar Carpeta de Materia"
-                          : "Crear Carpeta de Materia",
+                          ? (isSubfolder ? "Editar Subcarpeta" : "Editar Carpeta de Materia")
+                          : (isSubfolder ? "Crear Subcarpeta" : "Crear Carpeta de Materia"),
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -147,8 +156,10 @@ class _FolderModalContentState extends State<FolderModalContent> {
                     const SizedBox(height: 8),
                     Text(
                       widget.id != null
-                          ? "Modifica el nombre, color o icono de tu materia."
-                          : "Crea un espacio para agrupar todas las fotos y capturas de una clase.",
+                          ? "Modifica el nombre, color o icono."
+                          : (isSubfolder
+                              ? "Crea una subcarpeta dentro de esta materia para organizar temas o unidades."
+                              : "Crea un espacio para agrupar todas las fotos y capturas de una clase."),
                       style: const TextStyle(
                         fontSize: 13,
                         color: AppColors.textSecondary,
@@ -159,8 +170,8 @@ class _FolderModalContentState extends State<FolderModalContent> {
                       controller: nameController,
                       autofocus: widget.id == null,
                       decoration: InputDecoration(
-                        hintText: "Ej. Matemáticas Discretas",
-                        labelText: "Nombre de la materia",
+                        hintText: isSubfolder ? "Ej. Unidad 1 / Exámenes" : "Ej. Matemáticas Discretas",
+                        labelText: isSubfolder ? "Nombre de la subcarpeta" : "Nombre de la materia",
                         filled: true,
                         fillColor: AppColors.surfaceAlt,
                         border: OutlineInputBorder(

@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:klasio/config/app_colors.dart';
+import 'package:klasio/config/custom_navigator.dart';
 import 'package:klasio/config/data.dart';
 import 'package:klasio/core/service/native_service.dart';
 import 'package:klasio/domain/entities/capture.dart';
+import 'package:klasio/domain/entities/folder.dart';
 import 'package:klasio/presentation/providers/capture_notifier.dart';
+import 'package:klasio/presentation/providers/folder_notifier.dart';
 import 'package:klasio/presentation/providers/tag_notifier.dart';
 import 'package:klasio/presentation/widgets/widgets.dart';
 
@@ -49,6 +52,107 @@ class _FolderContentScreenState extends ConsumerState<FolderContentScreen> {
 
     final captureNotifier = ref.read(captureNotifierProvider.notifier);
     await captureNotifier.getAll(folderId: widget.folderId, tagId: 0);
+  }
+
+  Future<void> _showCreateSubfolderModal({int? subfolderId}) async {
+    if (_isBusyNotifier.value) return;
+    _isBusyNotifier.value = true;
+    try {
+      final folderNotifier = ref.read(folderNotifierProvider.notifier);
+      final result = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) {
+          return FolderModalContent(
+            folderNotifier: folderNotifier,
+            id: subfolderId,
+            parentId: widget.folderId,
+          );
+        },
+      );
+      if (result == true) {
+        ref.invalidate(subfoldersProvider(widget.folderId));
+      }
+    } finally {
+      if (mounted) {
+        _isBusyNotifier.value = false;
+      }
+    }
+  }
+
+  Future<void> _openSubfolder(Folder subfolder) async {
+    if (_isBusyNotifier.value) return;
+    _isBusyNotifier.value = true;
+    try {
+      await CustomNavigator.pushFade(
+        context,
+        FolderContentScreen(
+          folderId: subfolder.id ?? 0,
+          folderName: subfolder.name,
+          folderColor:
+              colorOptions[subfolder.indexColor % colorOptions.length].option,
+          folderBgColor:
+              colorOptions[subfolder.indexColor % colorOptions.length].bgOption,
+        ),
+      );
+      if (mounted) {
+        ref.invalidate(subfoldersProvider(widget.folderId));
+        _loadCaptures();
+      }
+    } finally {
+      if (mounted) {
+        _isBusyNotifier.value = false;
+      }
+    }
+  }
+
+  Future<void> _showSubfolderOptions(Folder subfolder) async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(
+                  Icons.edit_outlined,
+                  color: AppColors.primary,
+                ),
+                title: const Text("Editar subcarpeta"),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showCreateSubfolderModal(subfolderId: subfolder.id);
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_outline,
+                  color: AppColors.danger,
+                ),
+                title: const Text("Eliminar subcarpeta"),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  if (subfolder.id != null) {
+                    await ref
+                        .read(folderNotifierProvider.notifier)
+                        .removeFolder(subfolder.id!);
+                    ref.invalidate(subfoldersProvider(widget.folderId));
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _showCreateCaptureModal({
@@ -218,10 +322,7 @@ class _FolderContentScreenState extends ConsumerState<FolderContentScreen> {
     _isBusyNotifier.value = true;
     dynamic result;
     try {
-      result = await CaptureOptionsModal.show(
-        context,
-        capture: capture,
-      );
+      result = await CaptureOptionsModal.show(context, capture: capture);
     } finally {
       if (mounted) {
         _isBusyNotifier.value = false;
@@ -269,8 +370,9 @@ class _FolderContentScreenState extends ConsumerState<FolderContentScreen> {
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppColors.surface,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           content: Padding(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
             child: Column(
@@ -333,7 +435,8 @@ class _FolderContentScreenState extends ConsumerState<FolderContentScreen> {
 
       if (foundCount == 0) {
         buffer.writeln(
-            "No se detectó texto legible en las capturas escaneadas.");
+          "No se detectó texto legible en las capturas escaneadas.",
+        );
       }
 
       if (mounted) {
@@ -405,15 +508,13 @@ class _FolderContentScreenState extends ConsumerState<FolderContentScreen> {
         data: (tags) => _selectedFilter == 0
             ? 0
             : (_selectedFilter - 1 < tags.length
-                ? (tags[_selectedFilter - 1].id)
-                : 0),
+                  ? (tags[_selectedFilter - 1].id)
+                  : 0),
         orElse: () => 0,
       );
-      await ref.read(captureNotifierProvider.notifier).getAll(
-            folderId: widget.folderId,
-            tagId: tagId,
-            page: newPage,
-          );
+      await ref
+          .read(captureNotifierProvider.notifier)
+          .getAll(folderId: widget.folderId, tagId: tagId, page: newPage);
     } finally {
       if (mounted) {
         _isBusyNotifier.value = false;
@@ -433,6 +534,7 @@ class _FolderContentScreenState extends ConsumerState<FolderContentScreen> {
   Widget build(BuildContext context) {
     final tagAsyncValue = ref.watch(tagNotifierProvider);
     final captureAsyncValue = ref.watch(captureNotifierProvider);
+    final subfoldersAsyncValue = ref.watch(subfoldersProvider(widget.folderId));
 
     return ValueListenableBuilder<bool>(
       valueListenable: _isBusyNotifier,
@@ -464,6 +566,7 @@ class _FolderContentScreenState extends ConsumerState<FolderContentScreen> {
                             orElse: () => 0,
                           ),
                           onExtractText: _extractTextFromAllCaptures,
+                          onAddSubfolder: () => _showCreateSubfolderModal(),
                           onAddCapture: _showAddCaptureSheet,
                         ),
                       ),
@@ -494,6 +597,87 @@ class _FolderContentScreenState extends ConsumerState<FolderContentScreen> {
                             ],
                           ),
                         ),
+                      ),
+
+                      subfoldersAsyncValue.when(
+                        data: (subfolders) {
+                          if (subfolders.isEmpty) {
+                            return const SliverToBoxAdapter(
+                              child: SizedBox.shrink(),
+                            );
+                          }
+                          return SliverToBoxAdapter(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 6,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        "Subcarpetas",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      Text(
+                                        "${subfolders.length}",
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(
+                                  height: 106,
+                                  child: ListView.builder(
+                                    scrollDirection: Axis.horizontal,
+                                    physics: const BouncingScrollPhysics(),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    itemCount: subfolders.length,
+                                    itemBuilder: (context, index) {
+                                      final sub = subfolders[index];
+                                      final col =
+                                          colorOptions[sub.indexColor %
+                                              colorOptions.length];
+                                      final iconData =
+                                          iconOptions[sub.indexIcon %
+                                                  iconOptions.length]
+                                              .option;
+                                      return SubFolderItem(
+                                        bgColor: col.bgOption,
+                                        option: col.option,
+                                        iconData: iconData,
+                                        captureCount: "${sub.captureCount}",
+                                        name: sub.name,
+                                        onTap: () => _openSubfolder(sub),
+                                        onLongPress: () =>
+                                            _showSubfolderOptions(sub),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                            ),
+                          );
+                        },
+                        loading: () =>
+                            const SliverToBoxAdapter(child: SizedBox.shrink()),
+                        error: (error, stack) =>
+                            const SliverToBoxAdapter(child: SizedBox.shrink()),
                       ),
 
                       tagAsyncValue.when(
@@ -527,8 +711,9 @@ class _FolderContentScreenState extends ConsumerState<FolderContentScreen> {
                               child: ListView.builder(
                                 scrollDirection: Axis.horizontal,
                                 physics: const BouncingScrollPhysics(),
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 20),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
                                 itemCount: tags.length,
                                 itemBuilder: (context, index) {
                                   final isSelected = _selectedFilter == index;
@@ -595,12 +780,13 @@ class _FolderContentScreenState extends ConsumerState<FolderContentScreen> {
                             sliver: SliverGrid(
                               gridDelegate:
                                   SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount:
-                                    isTablet ? 5 : (isLandscape ? 5 : 2),
-                                crossAxisSpacing: 12,
-                                mainAxisSpacing: 12,
-                                childAspectRatio: 0.82,
-                              ),
+                                    crossAxisCount: isTablet
+                                        ? 5
+                                        : (isLandscape ? 5 : 2),
+                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 12,
+                                    childAspectRatio: 0.82,
+                                  ),
                               delegate: SliverChildBuilderDelegate((
                                 context,
                                 index,

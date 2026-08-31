@@ -10,6 +10,14 @@ final folderDatasourceProvider = Provider<FolderDatasource>(
 final folderNotifierProvider =
     AsyncNotifierProvider<FolderNotifier, FolderList>(FolderNotifier.new);
 
+final subfoldersProvider = FutureProvider.family<List<Folder>, int>((
+  ref,
+  parentId,
+) async {
+  final ds = ref.read(folderDatasourceProvider);
+  return await ds.getSubfolders(parentId);
+});
+
 class FolderNotifier extends AsyncNotifier<FolderList> {
   late final FolderDatasource _ds;
 
@@ -38,6 +46,7 @@ class FolderNotifier extends AsyncNotifier<FolderList> {
     int page = 1,
     int pageSize = 10,
     String query = '',
+    int? parentId,
   }) async {
     if (page <= 0) page = 1;
     if (pageSize <= 0) pageSize = 10;
@@ -47,6 +56,7 @@ class FolderNotifier extends AsyncNotifier<FolderList> {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final result = await _ds.getAll(
+        parentId: parentId,
         limit: pageSize,
         offset: offset,
         query: query,
@@ -73,8 +83,14 @@ class FolderNotifier extends AsyncNotifier<FolderList> {
     return await _ds.getById(id);
   }
 
-  Future<void> addFolder(String name, int indexIcon, int indexColor) async {
+  Future<Folder> addFolder(
+    String name,
+    int indexIcon,
+    int indexColor, {
+    int? parentId,
+  }) async {
     final folder = Folder(
+      parentId: parentId,
       name: name,
       indexIcon: indexIcon,
       indexColor: indexColor,
@@ -82,14 +98,18 @@ class FolderNotifier extends AsyncNotifier<FolderList> {
     );
     final inserted = await _ds.insert(folder);
 
-    state = state.whenData(
-      (current) => current.copyWith(
-        folders: [inserted, ...current.folders],
-        pagination: current.pagination.copyWith(
-          total: current.pagination.total + 1,
+    if (parentId == null) {
+      state = state.whenData(
+        (current) => current.copyWith(
+          folders: [inserted, ...current.folders],
+          pagination: current.pagination.copyWith(
+            total: current.pagination.total + 1,
+          ),
         ),
-      ),
-    );
+      );
+    }
+
+    return inserted;
   }
 
   Future<void> removeFolder(int id) async {
@@ -109,10 +129,12 @@ class FolderNotifier extends AsyncNotifier<FolderList> {
     int id,
     String name,
     int indexIcon,
-    int indexColor,
-  ) async {
+    int indexColor, {
+    int? parentId,
+  }) async {
     final folder = Folder(
       id: id,
+      parentId: parentId,
       name: name,
       indexIcon: indexIcon,
       indexColor: indexColor,

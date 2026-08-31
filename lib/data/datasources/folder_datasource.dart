@@ -11,18 +11,33 @@ class FolderDatasource {
   }
 
   Future<FolderWithTotal> getAll({
+    int? parentId,
     int limit = 10,
     int offset = 0,
     String query = '',
   }) async {
     final db = await DatabaseHelper().database;
 
-    final where = query.isNotEmpty ? 'f.name LIKE ?' : null;
-    final whereArgs = query.isNotEmpty ? ['%$query%'] : null;
+    final List<String> conditions = [];
+    final List<dynamic> whereArgs = [];
+
+    if (parentId == null) {
+      conditions.add('f.parent_id IS NULL');
+    } else {
+      conditions.add('f.parent_id = ?');
+      whereArgs.add(parentId);
+    }
+
+    if (query.isNotEmpty) {
+      conditions.add('f.name LIKE ?');
+      whereArgs.add('%$query%');
+    }
+
+    final where = conditions.isNotEmpty ? 'WHERE ${conditions.join(" AND ")}' : '';
 
     final totalResult = await db.rawQuery(
-      'SELECT COUNT(*) AS total FROM folders f ${where != null ? 'WHERE $where' : ''}',
-      whereArgs ?? [],
+      'SELECT COUNT(*) AS total FROM folders f $where',
+      whereArgs,
     );
     final total = Sqflite.firstIntValue(totalResult) ?? 0;
 
@@ -30,6 +45,7 @@ class FolderDatasource {
       '''
     SELECT
       f.id,
+      f.parent_id,
       f.name,
       f.index_icon,
       f.index_color,
@@ -37,18 +53,42 @@ class FolderDatasource {
       COUNT(c.id) AS captures_count
     FROM folders f
     LEFT JOIN captures c ON c.folder_id = f.id
-    ${where != null ? 'WHERE $where' : ''}
+    $where
     GROUP BY f.id
     ORDER BY f.created_at DESC
     LIMIT ? OFFSET ?
   ''',
-      [...?whereArgs, limit, offset],
+      [...whereArgs, limit, offset],
     );
 
     return FolderWithTotal(
       folders: maps.map((map) => FolderMapper.fromMap(map)).toList(),
       total: total,
     );
+  }
+
+  Future<List<Folder>> getSubfolders(int parentId) async {
+    final db = await DatabaseHelper().database;
+    final maps = await db.rawQuery(
+      '''
+    SELECT
+      f.id,
+      f.parent_id,
+      f.name,
+      f.index_icon,
+      f.index_color,
+      f.created_at,
+      COUNT(c.id) AS captures_count
+    FROM folders f
+    LEFT JOIN captures c ON c.folder_id = f.id
+    WHERE f.parent_id = ?
+    GROUP BY f.id
+    ORDER BY f.created_at DESC
+  ''',
+      [parentId],
+    );
+
+    return maps.map((map) => FolderMapper.fromMap(map)).toList();
   }
 
   Future<Folder?> getById(int id) async {

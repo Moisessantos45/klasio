@@ -10,5 +10,6 @@ export "./image_detail_modal.dart";
 export "./nav.dart";
 export "./pagination_controls.dart";
 export "./quick_capture_modal.dart";
+export "./sub_folder_item.dart";
 export "./tag_chip.dart";
 export "./text_extraction_viewer.dart";
